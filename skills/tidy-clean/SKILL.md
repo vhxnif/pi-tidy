@@ -1,5 +1,5 @@
 ---
-name: clean
+name: tidy-clean
 description: 清理并精简项目中的 AGENTS.md——移除显然、冗长、重复或放错位置的内容。
 ---
 
@@ -49,7 +49,8 @@ agent 不能靠读代码库推断出它，且它必须每个会话都成立。
 
 ## 流程
 
-1. 找到并读取项目中所有 AGENTS.md（`find . -name AGENTS.md`）
+1. 找到并读取项目中所有 AGENTS.md：
+   `find . \( -name node_modules -o -name .git -o -name dist -o -name build \) -prune -o -name AGENTS.md -print`
 2. 对每条内容做判定："agent 能从代码推断吗？它每会话都成立吗？"
 3. 不合格的移除；冗长的压缩到 1-3 行
 4. 清除父/子 AGENTS.md 之间的重复（子级只写与父级不同的部分）

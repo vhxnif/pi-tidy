@@ -20,8 +20,9 @@
  * - `learn` must inspect the current session, so it always runs in place.
  * - In an empty session, init/clean default to a fresh branch.
  *
- * The skill instructions live in ./skills/<mode>/SKILL.md and are also
- * discoverable by the model as standalone skills (init / learn / clean).
+ * The skill instructions live in ./skills/tidy-<mode>/SKILL.md and are also
+ * discoverable by the model as standalone skills
+ * (tidy-init / tidy-learn / tidy-clean).
  * /tidy bundles them into one command and enforces that all AGENTS.md
  * content is written in Chinese (简体中文).
  */
@@ -134,31 +135,26 @@ function getTidyState(ctx: ExtensionContext): TidySessionState | undefined {
 	return state;
 }
 
-function applyTidyState(ctx: ExtensionContext) {
-	const state = getTidyState(ctx);
-
-	if (state?.active && state.originId) {
-		tidyOriginId = state.originId;
-		setTidyWidget(ctx, true);
-		return;
-	}
-
-	tidyOriginId = undefined;
-	setTidyWidget(ctx, false);
-}
-
-async function loadSkillInstructions(mode: TidyMode): Promise<string | null> {
-	const skillPath = path.join(EXTENSION_DIR, "skills", mode, "SKILL.md");
+async function loadSkillInstructions(mode: TidyMode): Promise<string> {
+	const skillPath = path.join(EXTENSION_DIR, "skills", `tidy-${mode}`, "SKILL.md");
+	let content: string;
 	try {
-		const content = await fs.readFile(skillPath, "utf8");
-		// Strip frontmatter — the routing description is irrelevant once the
-		// mode has already been chosen.
-		const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, "");
-		const trimmed = withoutFrontmatter.trim();
-		return trimmed || null;
-	} catch {
-		return null;
+		content = await fs.readFile(skillPath, "utf8");
+	} catch (error) {
+		throw new Error(
+			`读取 ${skillPath} 失败: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
+		);
 	}
+
+	// Strip frontmatter — the routing description is irrelevant once the
+	// mode has already been chosen.
+	const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, "");
+	const trimmed = withoutFrontmatter.trim();
+	if (!trimmed) {
+		throw new Error(`${skillPath} 内容为空`);
+	}
+	return trimmed;
 }
 
 function findMode(token: string | undefined): TidyMode | undefined {
@@ -214,8 +210,11 @@ export default function tidyExtension(pi: ExtensionAPI) {
 		pi.appendEntry(TIDY_STATE_TYPE, { active, originId });
 	}
 
-	function getActiveTidyOrigin(ctx: ExtensionContext): string | undefined {
-		if (tidyOriginId) {
+	function restoreTidyState(
+		ctx: ExtensionContext,
+		options: { preferCached?: boolean; notifyOnMissingOrigin?: boolean } = {},
+	): string | undefined {
+		if (options.preferCached !== false && tidyOriginId) {
 			return tidyOriginId;
 		}
 
@@ -225,13 +224,20 @@ export default function tidyExtension(pi: ExtensionAPI) {
 			return tidyOriginId;
 		}
 
-		if (state?.active) {
+		tidyOriginId = undefined;
+		if (state?.active && options.notifyOnMissingOrigin) {
 			setTidyWidget(ctx, false);
 			pi.appendEntry(TIDY_STATE_TYPE, { active: false });
 			ctx.ui.notify("Tidy 状态缺失了起点信息，已自动清除标记。", "warning");
 		}
 
 		return undefined;
+	}
+
+	// session_start / session_tree must trust the persisted branch state, not
+	// the module cache: navigating away from a tidy branch should clear it.
+	function applyTidyState(ctx: ExtensionContext) {
+		setTidyWidget(ctx, restoreTidyState(ctx, { preferCached: false }) !== undefined);
 	}
 
 	function clearTidyState(ctx: ExtensionContext) {
@@ -248,9 +254,8 @@ export default function tidyExtension(pi: ExtensionAPI) {
 		applyTidyState(ctx);
 	});
 
-	async function buildTidyPrompt(mode: TidyMode): Promise<string | null> {
+	async function buildTidyPrompt(mode: TidyMode): Promise<string> {
 		const skill = await loadSkillInstructions(mode);
-		if (!skill) return null;
 
 		const meta = TIDY_MODES.find((m) => m.value === mode)!;
 		return [
@@ -270,6 +275,8 @@ export default function tidyExtension(pi: ExtensionAPI) {
 	 * stays untouched. Mirrors pi-review's fresh-session logic:
 	 * remember the origin, navigate to the first user message, and persist
 	 * state so tree navigation can restore it.
+	 *
+	 * Keep in sync with executeReview() in pi-review/review.ts.
 	 */
 	async function startFreshTidyBranch(
 		ctx: ExtensionCommandContext,
@@ -302,6 +309,7 @@ export default function tidyExtension(pi: ExtensionAPI) {
 				const result = await ctx.navigateTree(firstUserMessage.id, { summarize: false, label });
 				if (result.cancelled) {
 					tidyOriginId = undefined;
+					ctx.ui.notify("已取消在新分支运行 tidy。", "info");
 					return false;
 				}
 			} catch (error) {
@@ -331,7 +339,7 @@ export default function tidyExtension(pi: ExtensionAPI) {
 			return;
 		}
 
-		const originId = getActiveTidyOrigin(ctx);
+		const originId = restoreTidyState(ctx, { notifyOnMissingOrigin: true });
 		if (!originId) {
 			ctx.ui.notify("当前没有进行中的 tidy 分支（init/clean 可在分支中运行）", "info");
 			return;
@@ -368,7 +376,7 @@ export default function tidyExtension(pi: ExtensionAPI) {
 				return;
 			}
 
-			let mode = findMode(args?.split(/\s+/)[0]);
+			let mode = findMode(args?.trim().split(/\s+/)[0]);
 
 			if (!mode) {
 				if (args?.trim()) {
@@ -385,15 +393,21 @@ export default function tidyExtension(pi: ExtensionAPI) {
 			}
 
 			// Check if we're already in a tidy branch
-			if (getActiveTidyOrigin(ctx)) {
+			if (restoreTidyState(ctx, { notifyOnMissingOrigin: true })) {
 				ctx.ui.notify("已有 tidy 分支进行中，先用 /end-tidy 结束再开始新的整理。", "warning");
 				return;
 			}
 
 			const meta = TIDY_MODES.find((m) => m.value === mode)!;
-			const prompt = await buildTidyPrompt(mode);
-			if (!prompt) {
-				ctx.ui.notify(`加载 skills/${mode}/SKILL.md 失败，插件安装可能不完整`, "error");
+			let prompt: string;
+			try {
+				prompt = await buildTidyPrompt(mode);
+			} catch (error) {
+				// Command boundary: report the real cause instead of guessing.
+				ctx.ui.notify(
+					`加载 skills/tidy-${mode}/SKILL.md 失败: ${error instanceof Error ? error.message : String(error)}`,
+					"error",
+				);
 				return;
 			}
 

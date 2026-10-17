@@ -1,5 +1,5 @@
 {
-  "name": "vhxnif/pi-tidy",
+  "name": "@vhxnif/pi-tidy",
   "version": "0.1.0",
   "description": "Standalone /tidy extension for pi coding agent: init / learn / cleanup AGENTS.md maintenance",
   "type": "module",

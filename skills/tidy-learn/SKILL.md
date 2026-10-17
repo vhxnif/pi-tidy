@@ -1,5 +1,5 @@
 ---
-name: learn
+name: tidy-learn
 description: 分析本会话，把不显眼的经验沉淀到各级 AGENTS.md，逐步积累对代码库的理解
 ---
 

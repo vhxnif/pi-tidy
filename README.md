@@ -48,5 +48,5 @@ pi install git:github.com/vhxnif/pi-tidy
 - 空会话中启动的 tidy 默认直接在新分支运行。
 - `learn` 需要分析当前会话本身，因此不提供分支选择，始终在当前会话运行。
 
-三个 skill（`init` / `learn` / `clean`）也随包分发，模型可以自动加载，
-也可以用 `/skill:init`、`/skill:learn`、`/skill:clean` 显式触发。
+三个 skill（`tidy-init` / `tidy-learn` / `tidy-clean`）也随包分发，模型可以自动加载，
+也可以用 `/skill:tidy-init`、`/skill:tidy-learn`、`/skill:tidy-clean` 显式触发。
