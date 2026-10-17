@@ -1,0 +1,38 @@
+{
+  "name": "vhxnif/pi-tidy",
+  "version": "0.1.0",
+  "description": "Standalone /tidy extension for pi coding agent: init / learn / cleanup AGENTS.md maintenance",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./tidy.ts",
+      "default": "./tidy.ts"
+    }
+  },
+  "types": "./tidy.ts",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "pi": {
+    "extensions": [
+      "./tidy.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
